@@ -6,13 +6,13 @@ from operator import itemgetter
 
 def rollout_policy_fn(game):
     #rollout randomly
-    action_probs =np.random.rand(len(game.actions))
+    action_probs =np.random.rand(len(game.getactionlist()))
     #随机  走一步
-    return zip(game.actions,action_probs)
+    return zip(game.getactionlist(),action_probs)
 
 def policy_value_fn(game):
-    action_probs =np.ones(len(game.actions))/len(game.actions)
-    return zip(game.actions,action_probs)
+    action_probs =np.ones(len(game.getactionlist()))/len(game.getactionlist())
+    return zip(game.getactionlist(),action_probs),0
 
 class TreeNode(object):
     def __init__(self,parent,prior_p):
@@ -69,6 +69,7 @@ class MCTS(object):
             if node.is_leaf():
                 break
             action,node =node.select(self._c_puct)
+            #print "pureaction",action
             game.do_move(action)
         action_probs,_ =self._policy(game)
         end,winner = game.win()
@@ -79,7 +80,7 @@ class MCTS(object):
         node.update_recursive (-leaf_value)
 
     def _evaluate_rollout(self,game,limit=1000):
-        player = state.get_current_player()
+        player = game.get_current_player()
         for i in range(limit):
             end,winner =game.win()
             if end:
@@ -100,6 +101,7 @@ class MCTS(object):
     def get_move(self,game):
         for n in range(self._n_playout):
             game_copy =copy.deepcopy(game)
+            game_copy.setsimu(1)
             self._playout(game_copy)
         # 返回访问数最多的动作
         return max(self._root._children.items(),
@@ -107,8 +109,8 @@ class MCTS(object):
 
     def update_with_move(self,last_move):
 
-        if last_move in self._root.children:
-            self._root =self._root.children[last_move]
+        if last_move in self._root._children:
+            self._root =self._root._children[last_move]
             self._root._parent =None
         else:
             self._root =TreeNode(None,1.0)
@@ -129,21 +131,17 @@ class MCTSPlayer(object):
         self.mcts.update_with_move(-1)
 
     def get_action(self,game):
-        actions =game.actions
+        actions =game.getactionlist()
+
         if len(actions) > 0:
-            move =self.mcts.get_move(board)
+            move =self.mcts.get_move(game)
             self.mcts.update_with_move(-1)
+            print "pure    ",self.player,"\tmove\t",move
             return move
         else:
             print("WARNING: no choice")
     def __str__(self):
-        return "MCTS{}".format(self.player)
-
-
-
-
-
-
+        return "[MCTS Pure {}]".format(self.player)
 
 if __name__ == "__main__":
     test=np.random.rand(10)

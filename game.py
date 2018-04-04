@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 # author shell
 
-from __future__ import print_function
 import numpy as np
 import os
 import random
+from human import Human
+from mcts_pure import MCTSPlayer as MCTS_Pure
+from mcts_alphaZero import MCTSPlayer
+from policy_value_net import PolicyValueNet
 
 
 class Game(object):
@@ -16,6 +19,7 @@ class Game(object):
         self.states = {}
         self.players = [1, 2]
         self.matrix = [0]*self.width*self.height
+        self.actionlist = [0]*self.width*self.height*4
 
         self.setvalue(0, 0, 1)
         self.setvalue(0, 1, 1)
@@ -28,7 +32,14 @@ class Game(object):
         self.setvalue(3, 3, 2)
         self.LastView = None
         self.CurrentView = None
-        self.current_player =1
+        self.current_player = 1
+        self.stepnum = 0
+        self.simu = 0
+        self.last_move = -1
+        self.lastxy = ()
+
+    def setsimu(self, value):
+        self.simu = value
 
     def setvalue(self, x, y, v):
         m = self.location_to_move(x, y)
@@ -82,6 +93,13 @@ class Game(object):
             view.append(viewline)
         return view
 
+    def linechessnum(self, line):
+        n = 0
+        for x in line:
+            if int(x) > 0:
+                n = n+1
+        return n
+
     def judge(self):
         self.CurrentView = self.getview()
 
@@ -104,12 +122,12 @@ class Game(object):
         i = 0
         if self.LastView:
             for x in specnum:
-                if self.LastView[x] != speclines[i]:
+                if self.LastView[x] != speclines[i] and self.linechessnum(self.LastView[x]) < 4:
                     self.kill(x, speclines[i])
-        
+                i = i+1
 
     def kill(self, x, killline):
-        
+
         y = 0
         if killline in ["2110", "1220"]:
             y = 0
@@ -122,41 +140,62 @@ class Game(object):
 
         if x < 4:
             self.setvalue(x, y, 0)
-            print("kill "+str(x)+" "+str(y))
+            if self.simu == 0:
+                print "==Player", self.current_player, "\tkill\t", str(
+                    x), str(y)
+                #raise Exception("kill")
         else:
             self.setvalue(y, x % 4, 0)
-            print ("kill "+str(y)+" "+str(x%4))
+            if self.simu == 0:
+                print "==Player", self.current_player, "\tkill\t", str(
+                    x), str(y)
+                #raise Exception("kill")
 
     def win(self):
-        p1num =0
-        p2num =0
+        p1num = 0
+        p2num = 0
         for x in self.matrix:
-            if x ==1:
-                p1num =p1num+1
-            if x==2:
-                p2num =p2num+1
-        if p1num==1:
-            return True,2
-        if p2num==1:
-            return True,1
-        return False,0
+            if x == 1:
+                p1num = p1num+1
+            if x == 2:
+                p2num = p2num+1
+        #print "judge win",p1num,p2num
 
+        actions = self.getactions()
 
-    def getactions(self, p):
+        if len(actions) == 0:
+            winner = 1
+
+            if self.current_player == 2:
+                winner = 1
+            else:
+                winner = 2
+
+            return True, winner
+
+        if p1num <= 1:
+            return True, 2
+        if p2num <= 1:
+            return True, 1
+        if self.stepnum > 100:
+            return True, 0
+        return False, 0
+
+    def getactions(self):
         chess = []
 
         actions = []
         i = 0
         for m in self.matrix:
 
-            if m == p:
+            if m == self.current_player:
                 chess.append(i)
             i = i+1
         #print (chess)
 
         for c in chess:
-            alist = [1, 2, 3, 4]
-            x,y= self.move_to_location(c)
+            alist = [0, 1, 2, 3]
+            x, y = self.move_to_location(c)
             #print (x, y)
             # check edge
             if x == 0:
@@ -164,7 +203,7 @@ class Game(object):
             if x == 3:
                 alist.remove(1)
             if y == 0:
-                alist.remove(4)
+                alist.remove(0)
             if y == 3:
                 alist.remove(2)
             self.checkused(c, alist)
@@ -172,18 +211,48 @@ class Game(object):
                 actions.append((c, a))
         return actions
 
+    def getactionlist(self):
+        actions = self.getactions()
+        #print ("actions",actions)
+        self.actionlist = []
+        for c, a in actions:
+            x, y = self.move_to_location(c)
+            # print(x,y,a)
+            self.actionlist.append(c*4+a)
+
+        return self.actionlist
+
     def moveloc(self, m, a):
-        cx,cy = self.move_to_location(m)
+        cx, cy = self.move_to_location(m)
         if a == 1:
             cx = cx+1
         if a == 2:
             cy = cy+1
         if a == 3:
-            cx= cx-1
-        if a == 4:
+            cx = cx-1
+        if a == 0:
             cy = cy-1
 
         return cx, cy
+
+    def action_to_xya(self, action):
+        a = action % 4
+        m = action//4
+        x, y = self.move_to_location(m)
+        return x, y, a
+
+    def do_move(self, action):
+        x, y, a = self.action_to_xya(action)
+        #print "do_move_action",action,x,y,a
+
+        self.playstep(self.current_player, x, y, a)
+
+        if self.current_player == 1:
+            self.current_player = 2
+        else:
+            self.current_player = 1
+        self.last_move = action
+        # self.show()
 
     def checkused(self, c, alist):
 
@@ -197,88 +266,174 @@ class Game(object):
             alist.remove(rc)
 
     def show(self):
-        player1 =1
-        player2 =2
+        player1 = 1
+        player2 = 2
         #print("Player", player1, "with X".rjust(3))
         #print("Player", player2, "with O".rjust(3))
-#        for x in range(width):
-#            print("{0:8}".format(x), end='')
+        # for x in range(width):
+        #   print("{0:8}".format(x), end='')
         os.system("clear")
         print('\r\n')
         for i in range(self.height-1, -1, -1):
-            #            print ("{0:4d}".format(i), end='')
+            # print ("{0:4d}".format(i), end='')
             for j in range(self.width):
                 loc = i * self.width+j
                 p = self.matrix[loc]
                 if p == player1:
-                    print ('X'.center(8), end='')
+                    print 'X'.center(8),
                 elif p == player2:
-                    print ('O'.center(8), end='')
+                    print 'O'.center(8),
                 else:
-                    print ('.'.center(8), end='')
+                    print '.'.center(8),
             print ('\r\n\r\n')
 
     def playstep(self, player, x, y, a):
-        calist = self.getactions(player)
         self.current_player = player
-        print ("-------------------")
-        print (calist)
-        print ("-------------------")
-        self.LastView =list(self.getview())
+        calist = self.getactions()
+        #print ("-------------------")
+        #print (x,y,a,calist)
+        #print ("-------------------")
+        self.LastView = list(self.getview())
 
         m = self.location_to_move(x, y)
         if (m, a) in calist:
             cx, cy = self.moveloc(m, a)
             self.setvalue(x, y, 0)
             self.setvalue(cx, cy, player)
+            self.stepnum += 1
+            self.lastxy = (cx, cy)
+            #print("****",self.current_player,"move",x,y,a,"***** step",self.stepnum)
             self.judge()
-                
+
         else:
-            print (x,y,a," is wrong")
+            print x, y, a, " is wrong", m, calist, "currentplayer", self.current_player
+            raise Exception()
             return False
         return True
 
-    def autoplay(self,player):
-        calist = self.getactions(player)
-        calen=len(calist)
-        rnd =random.randint(0,calen-1)
-        (c,a)=calist[rnd]
-        x,y=self.move_to_location(c)
-        print ("player"+str(player)+" move "+str(x)+" "+str(y))
-        return self.playstep(player,x,y,a)
+    def current_state(self):
+        square_state = np.zeros((4, self.width, self.height))
+        #print ("matrix = ",self.matrix)
+        #print ("current_player=",self.current_player,self.stepnum)
+
+        i = 0
+        for m in self.matrix:
+
+            if m != 0:
+                x, y = self.move_to_location(i)
+                #print x,y
+                if m == self.current_player:
+                    square_state[0][x, y] = 1.0
+                else:
+                    square_state[1][x, y] = 1.0
+            i = i+1
+
+        # Last Move
+        if self.lastxy != ():
+            x, y = self.lastxy
+            #print x,y
+            square_state[2][x, y] = 1.0
+
+        # color
+        if self.stepnum % 2 == 0:
+            square_state[3] = 1.0
+
+        #print ("square_state:",square_state)
+        return square_state
+
+    def get_current_player(self):
+        return self.current_player
+
+    def start_self_play(self, player, is_shown=0, temp=1e-3):
+        p1, p2 = self.players
+        states, mcts_probs, current_players = [], [], []
+        end = False
+        self.current_player = 1
+        player.set_player_ind(self.current_player)
+        while(1):
+            move, move_probs = player.get_action(
+                self, temp=temp, return_prob=1)
+            #print ("move,move_probs",move,move_probs)
+            mcts_probs.append(move_probs)
+
+            states.append(self.current_state())
+            current_players.append(self.current_player)
+
+            self.do_move(move)
+            player.set_player_ind(self.current_player)
+
+            if is_shown:
+                self.show()
+            end, winner = self.win()
+            if end:
+                winners_z = np.zeros(len(current_players))
+                if winner != 0:
+                    winners_z[np.array(current_players) == winner] = 1.0
+                    winners_z[np.array(current_players) != winner] = -1.0
+
+                player.reset_player()
+                if True:
+                    if winner != 0:
+                        print ("Game End.Player{0} Win".format(winner))
+                    else:
+                        print ("Game End. Tie")
+                    # print(states,mcts_probs,winners_z)
+
+                return winner, zip(states, mcts_probs, winners_z)
+        print("self_play end")
+
+    def start_play(self, player1, player2, start_player=0, is_shown=1):
+        self.__init__()
+        print "start_play", self.matrix
+
+        self.current_player = self.players[start_player]
+        p1, p2 = self.players
+        player1.set_player_ind(p1)
+        player2.set_player_ind(p2)
+        players = {p1: player1, p2: player2}
+        while(1):
+
+            player_in_turn = players[self.current_player]
+
+            move = player_in_turn.get_action(self)
+            actionlist = self.getactionlist()
+            #print "move",move,actionlist
+            #print  player_in_turn,"turn"
+            self.do_move(move)
+            end, winner = self.win()
+            if is_shown:
+                print player_in_turn, " 's turn"
+                self.show()
+
+            if end:
+                if winner != 0:
+                    print ("Game End.Player{0} Win".format(winner))
+                else:
+                    print ("Game End. Tie")
+                return winner
 
     def play(self):
-        game.show()
-        player = 1
-        while True:
-            mact = raw_input("input player "+str(player)+" action:")
-            ua = mact.split(',')
-            if len(ua) < 3:
-                continue
-            result =False
-            try:
-                result = game.playstep(player, int(ua[0]), int(ua[1]), int(ua[2]))
 
-            except Exception,e:
-                result =False
-                print (e)
-                print ("input wrong")
+        model_file = "best.model"
+        best_policy = PolicyValueNet(self.width, self.height, model_file)
+        mcts_player = MCTSPlayer(
+            best_policy.policy_value_fn, c_puct=5, n_playout=300)
+        pure_player = MCTS_Pure(c_puct=5, n_playout=500)
 
-            if result:
-                game.show()
-                w,p=self.win()
-                if w:
-                    print("Player "+str(p)+" Win!")
-                    break
-                else:
-                    result=self.autoplay(2)
-                    game.show()
-                    w,p =self.win()
-                    if w:
-                        print("Player "+str(p)+" Win!")
-                        break
-            else:
-                game.show()
+
+        human1 = Human()
+        human2 = Human()
+        # self.show()
+
+        winners = []
+        for i in range(10):
+            winner = self.start_play(
+                pure_player, mcts_player, start_player=0, is_shown=0)
+            #self.start_play(pure_player,mcts_player, start_player=0, is_shown=1)
+            winners.append(winner)
+            print winner
+        print winners
+
 
 if __name__ == "__main__":
     game = Game(width=4, height=4)
