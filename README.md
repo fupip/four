@@ -1,3 +1,3 @@
 # Four
-Four is a china  board game with AlphaGo Zero policy.
+Four is a china board game with Alpha Zero policy.
 
