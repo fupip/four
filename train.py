@@ -3,7 +3,7 @@
 from __future__ import print_function
 import random
 import numpy as np
-from collections import defaultdict,deque
+from collections import defaultdict, deque
 
 from game import Game
 from mcts_pure import MCTSPlayer as MCTS_Pure
@@ -12,46 +12,54 @@ from policy_value_net import PolicyValueNet
 
 
 class Train():
-    def __init__(self,init_model = None):
+    def __init__(self, init_model=None):
         # params of the game
-        self.width  = 4
+        self.width = 4
         self.height = 4
-        self.game =Game()
+        self.game = Game()
         # params of training
-        self.learn_rate= 2e-3
-        self.lr_muliplier =1.0 
-        self.temp =1.0
-        self.n_playout =400
-        self.c_puct =5
+        self.learn_rate = 2e-3
+        self.lr_muliplier = 1.0
+        self.temp = 1.0
+        self.n_playout = 400
+        self.c_puct = 5
         self.buffer_size = 10000
-        self.batch_size =512
-        self.data_buffer =deque(maxlen =self.buffer_size)
+        self.batch_size = 512
+        self.data_buffer = deque(maxlen=self.buffer_size)
         self.play_batch_size = 1
         self.epochs = 5
-        self.kl_targ =0.02
-        self.check_freq =50
-        self.game_batch_num =1500
+        self.kl_targ = 0.02
+        self.check_freq = 50
+        self.game_batch_num = 1500
         self.best_win_ratio = 0.0
 
-        self.pure_mcts_playout_num =1000
+        self.pure_mcts_playout_num = 1000
 
         if init_model:
-            self.policy_value_net = PolicyValueNet(self.width,self.height,model_file= init_model)
+            self.policy_value_net = PolicyValueNet(
+                self.width, self.height, model_file=init_model)
         else:
-            self.policy_value_net = PolicyValueNet(self.width,self.height)
-
-
-
-
+            self.policy_value_net = PolicyValueNet(self.width, self.height)
 
         def run(self):
             for i in range(self.game_batch_num):
                 self.collect_selfplay_data(self.play_batch_size)
-                if len(self.data_buffer) >self.batch_size:
-                    loss,entropy =self.policy_update()
+                if len(self.data_buffer) > self.batch_size:
+                    loss, entropy = self.policy_update()
+
+                if (i+1) % self.check_freq == 0:
+                    print ("current self-play batch:{}".format(i+1))
+                    win_ratio = self.policy_evaluate()
+                    self.policy_value_net.save_model('current.model')
+                    if win_ratio > self.best_win_ratio:
+                        print("new best model")
+                        self.best_win_ratio = win_ratio
+                        self.policy_value_net.save_model("best.model")
+                        if self.best_win_ratio == 1.0 and self.pure_mcts_playout_num < 5000):
+                            self.pure_mcts_playout_num += 1000
+                            self.best_win_ratio=0.0
 
 
-
-
-
-
+if __name__ == '__main__':
+    train=Train()
+    train.run()
