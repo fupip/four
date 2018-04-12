@@ -21,7 +21,7 @@ class Train():
         self.learn_rate = 2e-3
         self.lr_multiplier = 1.0
         self.temp = 1.0
-        self.n_playout = 30
+        self.n_playout = 300
         self.c_puct = 5
         self.buffer_size = 10000
         self.batch_size = 64
@@ -33,7 +33,7 @@ class Train():
         self.game_batch_num = 5000
         self.best_win_ratio = 0.0
 
-        self.pure_mcts_playout_num = 30
+        self.pure_mcts_playout_num = 500
 
         if init_model:
             self.policy_value_net = PolicyValueNet(
@@ -62,7 +62,7 @@ class Train():
             self.data_buffer.extend(play_data)
 
     def policy_update(self):
-        print "____policy___update_______"
+        #print "____policy___update_______"
         mini_batch = random.sample(self.data_buffer, self.batch_size)
         state_batch = [data[0] for data in mini_batch]
         mcts_probs_batch = [data[1] for data in mini_batch]
@@ -87,7 +87,6 @@ class Train():
             self.lr_multiplier /= 1.5
         elif kl < self.kl_targ / 2 and self.lr_multiplier < 10:
             self.lr_multiplier *= 1.5
-
         explained_var_old = (1 -
                              np.var(np.array(winner_batch) - old_v.flatten()) /
                              np.var(np.array(winner_batch)))
@@ -103,7 +102,7 @@ class Train():
 
     def policy_evaluate(self, n_games=10):
 
-        print "_____policy__evaluation________"
+        #print "_____policy__evaluation________"
 
         current_mcts_player = MCTSPlayer(self.policy_value_net.policy_value_fn,
                                          c_puct=self.c_puct,
@@ -163,3 +162,4 @@ if __name__ == '__main__':
 
     train = Train(init_model=model_path)
     train.run()
+    #train.policy_evaluate()

@@ -15,9 +15,8 @@ class PolicyValueNet(object):
 
 
         # Action Net to PolicyLoss
-        self.input_states =tf.placeholder(tf.float32,shape =[None,4,self.height,self.width])
-        self.input_states_reshaped =tf .reshape(self.input_states,[-1,self.height,self.width,4])
-
+        self.input_states =tf.placeholder(tf.float32,shape =[None,10,self.height,self.width])
+        self.input_states_reshaped =tf.transpose(self.input_states,[0,2,3,1])
 
 
         self.conv1 =tf.layers.conv2d(inputs =self.input_states_reshaped,
@@ -125,13 +124,14 @@ class PolicyValueNet(object):
 
         #print "legal_actions",legal_actions
 
+        #print "game.stateque",len(game.stateque)
         cstate= game.current_state()
 
         #print "cstate",type(cstate),cstate.shape
         #print cstate
 
         current_state =np.ascontiguousarray(cstate.reshape(
-            -1,4,self.width,self.height))
+            -1,10,self.width,self.height))
 
 
         act_probs,value =self.policy_value(current_state)

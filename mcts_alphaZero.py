@@ -68,6 +68,7 @@ class MCTS(object):
         #print "____________PLAYOUT______________"
 
         node = self._root
+        #print node._children
         while(1):
             if node.is_leaf():
                 break
@@ -105,6 +106,7 @@ class MCTS(object):
             game_copy = copy.deepcopy(game)
             game_copy.setsimu(1)
 #CALL PlayOUT
+            #print "gamecopy.stateque",len(game_copy.stateque)
             self._playout(game_copy)
 
         #print "_root.children",self._root._children
@@ -151,7 +153,10 @@ class MCTSPlayer(object):
         #print "____________get_action___________"
         actions = game.getactionlist()
 
+        #print "get_action game.stateque", len(game.stateque)
+
         move_probs = np.zeros(game.width * game.height * 4)
+
 
         if len(actions) > 0:
             acts, probs = self.mcts.get_move_probs(game, temp)
