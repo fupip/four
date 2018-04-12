@@ -8,6 +8,7 @@ from human import Human
 from mcts_pure import MCTSPlayer as MCTS_Pure
 from mcts_alphaZero import MCTSPlayer
 from policy_value_net import PolicyValueNet
+from collections import deque,defaultdict
 
 
 class Game(object):
@@ -37,6 +38,8 @@ class Game(object):
         self.simu = 0
         self.last_move = -1
         self.lastxy = ()
+        self.stateque = deque(maxlen=4)
+        self.stateque.append(list(self.matrix))
 
     def setsimu(self, value):
         self.simu = value
@@ -252,6 +255,7 @@ class Game(object):
         else:
             self.current_player = 1
         self.last_move = action
+        self.stateque.append(list(self.matrix))
         # self.show()
 
     def checkused(self, c, alist):
@@ -312,33 +316,33 @@ class Game(object):
         return True
 
     def current_state(self):
-        square_state = np.zeros((4, self.width, self.height))
+        square_state = np.zeros((10, self.width, self.height))
         #print ("matrix = ",self.matrix)
         #print ("current_player=",self.current_player,self.stepnum)
 
-        i = 0
-        for m in self.matrix:
-
-            if m != 0:
-                x, y = self.move_to_location(i)
-                #print x,y
-                if m == self.current_player:
-                    square_state[0][x, y] = 1.0
-                else:
-                    square_state[1][x, y] = 1.0
-            i = i+1
+        
+        for index,matrix  in enumerate(self.stateque):
+            for i,m in enumerate(matrix):
+                if m != 0:
+                    x, y = self.move_to_location(i)
+                    #print x,y
+                    if m == self.current_player:
+                        square_state[index*2][x, y] = 1.0
+                    else:
+                        square_state[index*2+1][x, y] = 1.0
 
         # Last Move
         if self.lastxy != ():
             x, y = self.lastxy
             #print x,y
-            square_state[2][x, y] = 1.0
+            square_state[8][x, y] = 1.0
 
         # color
         if self.stepnum % 2 == 0:
-            square_state[3] = 1.0
+            square_state[9] = 1.0
 
-        #print ("square_state:",square_state)
+        #print "square_state:",square_state
+        #raise Exception("test")
         return square_state
 
     def get_current_player(self):
@@ -392,9 +396,7 @@ class Game(object):
         player2.set_player_ind(p2)
         players = {p1: player1, p2: player2}
         while(1):
-
             player_in_turn = players[self.current_player]
-
             move = player_in_turn.get_action(self)
             actionlist = self.getactionlist()
             #print "move",move,actionlist
@@ -414,25 +416,23 @@ class Game(object):
 
     def play(self):
 
-        model_file = "best.model"
+        model_file = "current.model"
         best_policy = PolicyValueNet(self.width, self.height, model_file)
         mcts_player = MCTSPlayer(
             best_policy.policy_value_fn, c_puct=5, n_playout=300)
-        pure_player = MCTS_Pure(c_puct=5, n_playout=500)
+        pure_player = MCTS_Pure(c_puct=5, n_playout=300)
 
 
         human1 = Human()
         human2 = Human()
         # self.show()
 
-        winners = []
+        win_cnt =defaultdict(int)
         for i in range(10):
-            winner = self.start_play(
-                pure_player, mcts_player, start_player=0, is_shown=0)
-            #self.start_play(pure_player,mcts_player, start_player=0, is_shown=1)
-            winners.append(winner)
-            print winner
-        print winners
+            winner=self.start_play(mcts_player,pure_player, start_player=(i%2), is_shown=1)
+            win_cnt[winner] +=1 
+        print "win",win_cnt[1],"lose",win_cnt[2],"tie",win_cnt[0]
+
 
 
 if __name__ == "__main__":
